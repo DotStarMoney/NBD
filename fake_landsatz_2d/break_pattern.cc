@@ -93,7 +93,7 @@ inline ShapeFill RandomShapeFill() {
 }  // namespace
 
 std::unique_ptr<bool> BreakPattern(int width, int height, int multiplier,
-															     int shapes_n) {
+                                   int shapes_n) {
   int landscape_width = width * multiplier;
   int landscape_height = height * multiplier;
   std::vector<bool> landscape(landscape_height * landscape_width, false);

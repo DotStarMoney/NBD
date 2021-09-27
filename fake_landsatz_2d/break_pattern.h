@@ -10,4 +10,4 @@ std::unique_ptr<bool> BreakPattern(int width, int height, int multiplier = 6,
 
 }  // namespace nbd
 
-#endif  // BREAK_PATTERN_H_
+#endif  // NBD_BREAK_PATTERN_H_

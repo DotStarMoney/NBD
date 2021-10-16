@@ -38,7 +38,8 @@ retry_break_pattern:
     if (util::rndd() < config.event_prob) {
       auto break_pattern = BreakPattern(config.width, config.height, 
                                         config.break_pattern_multiplier, 
-                                        config.break_pattern_shapes_n);
+                                        config.break_pattern_shapes_n,
+                                        config.break_pattern_point_plot_prob);
       for (int slice_i = 0; slice_i < slice_n; ++slice_i) {
         events.get()[offset_3d + slice_i] = break_pattern.get()[slice_i];
       }
@@ -51,7 +52,8 @@ retry_break_pattern:
     if (util::rndd() < unmask_prob) {
       auto break_pattern = BreakPattern(config.width, config.height,
                                         config.break_pattern_multiplier,
-                                        config.break_pattern_shapes_n);
+                                        config.break_pattern_shapes_n, 
+                                        config.break_pattern_point_plot_prob);
       for (int slice_i = 0; slice_i < slice_n; ++slice_i) {
         mask.get()[offset_3d + slice_i] = break_pattern.get()[slice_i];
       }      

@@ -93,12 +93,12 @@ inline ShapeFill RandomShapeFill() {
 }  // namespace
 
 std::unique_ptr<bool> BreakPattern(int width, int height, int multiplier,
-                                   int shapes_n) {
+                                   int shapes_n, float point_plot_prob) {
   int landscape_width = width * multiplier;
   int landscape_height = height * multiplier;
   std::vector<bool> landscape(landscape_height * landscape_width, false);
   for (int shape_i = 0; shape_i < shapes_n; ++shape_i) {
-    if (util::TrueWithChance(0.8)) {
+    if (util::TrueWithChance(point_plot_prob)) {
       Plot(util::TrueWithChance(0.5), util::rnd() % landscape_width,
            util::rnd() % landscape_height, landscape_width, &landscape);
     } else {

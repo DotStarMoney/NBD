@@ -24,6 +24,7 @@ struct SynthesizeConfig {
   float raw_spine_prob;
   int break_pattern_multiplier;
   int break_pattern_shapes_n;
+  float break_pattern_point_plot_prob;
 };
 
 const SynthesizeConfig kDefaultConfig = {.depth = 4096,
@@ -35,7 +36,8 @@ const SynthesizeConfig kDefaultConfig = {.depth = 4096,
                                          .event_min_period = 365,
                                          .raw_spine_prob = 0.01,
                                          .break_pattern_multiplier = 6,
-                                         .break_pattern_shapes_n = 100};
+                                         .break_pattern_shapes_n = 100,
+                                         .break_pattern_point_plot_prob = 0.8};
 
 SynthesizeResult Synthesize(const SynthesizeConfig& config = kDefaultConfig);
 

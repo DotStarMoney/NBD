@@ -1,12 +1,19 @@
 #include "synthesize.h"
 
 #include <memory>
+#include <stdint.h>
 
 #include "break_pattern.h"
 #include "random.h"
 
 namespace nbd {
 namespace {
+
+void GenerateTimeSeries(const SynthesizeConfig& config,
+                        const std::vector<int>& events, float* raw, 
+                        float* distance, float* spine, int stride) {
+  // Do the stuff!! This is the fun part!!
+}
 
 template <typename ElementType>
 std::unique_ptr<ElementType> CreateArray(int length) {
@@ -111,19 +118,38 @@ retry_break_pattern:
     }
   }
 
-  auto mask_trimmed = CreateArray<bool>(config.depth * slice_n);
+  auto mask_trimmed = CreateArray<int8_t>(config.depth * slice_n);
   int dst_offset = 0;
   for (int src_offset = min_index_inc * slice_n;
        src_offset < min_index_inc * slice_n; ++src_offset) {
-    mask_trimmed.get()[dst_offset] = mask.get()[src_offset];
+    mask_trimmed.get()[dst_offset] = mask.get()[src_offset] ? 1 : 0;
   }
-  mask = std::move(mask_trimmed);
 
-  //
-  // Create the time-series around all_breaks!
-  //
+  auto raw = CreateArray<float>(config.depth * slice_n);
+  auto distance = CreateArray<float>(config.depth * slice_n);
+  auto spine = CreateArray<float>(config.depth * slice_n);
 
-  return SynthesizeResult{.mask = std::move(mask)};
+  for (int i = 0; i < all_bounds.size(); ++i) {
+    GenerateTimeSeries(config, all_bounds[i], raw.get() + i, distance.get() + i, 
+                       spine.get() + i, slice_n);
+  }
+
+  if (util::TrueWithChance(config.raw_spine_prob)) {
+    // Return the spine as the input.
+    for (int i = 0; i < (config.depth * slice_n); ++i) {
+      mask_trimmed.get()[i] = 1;
+      raw.get()[i] = spine.get()[i];
+    }    
+  } else {
+    for (int i = 0; i < (config.depth * slice_n); ++i) {
+      raw.get()[i] *= mask_trimmed.get()[i];
+    }
+  }
+
+  return SynthesizeResult{.raw = std::move(raw),
+                          .distance = std::move(distance),
+                          .spine = std::move(spine),
+                          .mask = std::move(mask_trimmed)};
 }
 
 }  // namespace nbd

@@ -2,6 +2,7 @@
 #define NBD_SYNTHESIZE_H_
 
 #include <memory>
+#include <stdint.h>
 
 namespace nbd {
 
@@ -9,7 +10,7 @@ struct SynthesizeResult {
   std::unique_ptr<float> raw;
   std::unique_ptr<float> distance;
   std::unique_ptr<float> spine;
-  std::unique_ptr<bool> mask;
+  std::unique_ptr<int8_t> mask;
 };
 
 struct SynthesizeConfig {

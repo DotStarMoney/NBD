@@ -1,7 +1,8 @@
 #include "break_pattern.h"
 
-#include <algorithm>
 #include <math.h>
+
+#include <algorithm>
 #include <memory>
 #include <vector>
 

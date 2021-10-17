@@ -1,23 +1,95 @@
 #include "synthesize.h"
 
-#include <memory>
+#define _USE_MATH_DEFINES
+#include <math.h>
 #include <stdint.h>
+
+#include <memory>
 
 #include "break_pattern.h"
 #include "random.h"
 
 namespace nbd {
 namespace {
+template <typename ElementType>
+std::unique_ptr<ElementType> CreateArray(int length) {
+  return std::unique_ptr<ElementType>(new ElementType[length]);
+}
+
+float RandomTensionMu(float tension_max) {
+  float mu = util::rndd() * tension_max;
+  if (mu == 0) mu = 1.0;
+  return util::TrueWithChance(0.5) ? 1.0f / mu : mu;
+}
+
+struct Harmonic {
+  float frequency;
+  float phase;
+
+  float amplitude;
+  float amplitude_max;
+  float amplitude_saturate;
+
+  float saturate;
+  float saturate_max;
+
+  void GenerateAmplitudeConstants() {
+    amplitude = powf(util::rndd(), amplitude_saturate) * amplitude_max;
+    saturate = RandomTensionMu(saturate_max);
+  }
+
+  float sample(float x) const {
+    float h = 0.5f + sinf(x * frequency * phase) * 0.5f;
+    return amplitude * 2.0f * (powf(h, saturate) - 0.5f);
+  }
+};
+
+float RandomFrequency(float days_low, float days_high) {
+  return M_PI * 2.0f / (util::rndd() * (days_high - days_low) + days_low);
+}
 
 void GenerateTimeSeries(const SynthesizeConfig& config,
                         const std::vector<int>& events, float* raw, 
                         float* distance, float* spine, int stride) {
-  // Do the stuff!! This is the fun part!!
-}
+  int intervals = events.size() - 1;
+  auto bounds = CreateArray<int>(intervals * 2);
+  for (int i = 0; i < intervals; ++i) {
+    bounds.get()[2 * i] = events[i];
+    bounds.get()[2 * i + 1] = events[i + 1];
+  }
 
-template <typename ElementType>
-std::unique_ptr<ElementType> CreateArray(int length) {
-  return std::unique_ptr<ElementType>(new ElementType[length]);
+  int harmonics_n = 2;
+  Harmonic harmonics[3];
+  harmonics[0] = {.frequency = RandomFrequency(
+                      kYearDays - config.base_harmonic_freq_day_radius,
+                      kYearDays + config.base_harmonic_freq_day_radius), 
+                  .phase = M_PI * 2 * util::rndd(),
+                  .amplitude_max = config.base_harmonic_max_amplitude,
+                  .amplitude_saturate = config.base_harmonic_amplitude_sat,
+                  .saturate_max = config.harmonic_tension_max};
+  harmonics[1] = {.frequency = RandomFrequency(
+                      config.fast_harmonic_freq_min_days,
+                      config.fast_harmonic_freq_max_days), 
+                  .phase = M_PI * 2 * util::rndd(),
+                  .amplitude_max = config.fast_harmonic_max_amplitude,
+                  .amplitude_saturate = config.fast_harmonic_amplitude_sat,
+                  .saturate_max = config.harmonic_tension_max};
+  
+  if (util::TrueWithChance(config.slow_harmonic_prob)) {
+    harmonics_n = 3;
+    harmonics[2] = {.frequency = RandomFrequency(
+                        config.slow_harmonic_freq_min_years,
+                        config.slow_harmonic_freq_max_years), 
+                    .phase = M_PI * 2 * util::rndd(),
+                    .amplitude_max = config.slow_harmonic_max_amplitude,
+                    .amplitude_saturate = config.slow_harmonic_amplitude_sat,
+                    .saturate_max = 1.0f};
+  }
+
+  //
+  // Generate spine and mush harmonics and noise into it.
+  //
+
 }
 }  // namespace
 

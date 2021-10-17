@@ -152,7 +152,7 @@ void GenerateTimeSeries(const SynthesizeConfig& config,
       for (int q = 0; q < harmonics_n; ++q) {
         harmonics[q].GenerateAmplitudeConstants();
       }
-      float gaussian_noise_sigma =
+      gaussian_noise_sigma =
           config.min_noise_sigma +
           util::rndd() * (config.max_noise_sigma - config.min_noise_sigma);
       seg_start_y = util::rndd();

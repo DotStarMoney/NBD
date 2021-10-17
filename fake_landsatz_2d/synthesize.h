@@ -39,6 +39,14 @@ struct SynthesizeConfig {
   float slow_harmonic_max_amplitude;
   float slow_harmonic_amplitude_sat;
   float harmonic_tension_max;
+  float min_noise_sigma;
+  float max_noise_sigma;
+  float spine_tension_max;
+  float curve_normalize_prob;
+  float curve_normalize_rand_edge;
+  float outlier_prob;
+  float outlier_scale;
+  float max_distance;
 };
 
 constexpr float kYearDays = 365;
@@ -67,7 +75,15 @@ const SynthesizeConfig kDefaultConfig = {
     .slow_harmonic_freq_max_years = 5,
     .slow_harmonic_max_amplitude = 0.1,
     .slow_harmonic_amplitude_sat = 2,
-    .harmonic_tension_max = 8};
+    .harmonic_tension_max = 8,
+    .min_noise_sigma = 0,
+    .max_noise_sigma = 0.1,
+    .spine_tension_max = 8,
+    .curve_normalize_prob = 0.25,
+    .curve_normalize_rand_edge = 0.2,
+    .outlier_prob = 0.04,
+    .outlier_scale = 3,
+    .max_distance = kYearDays};
 
 SynthesizeResult Synthesize(const SynthesizeConfig& config = kDefaultConfig);
 

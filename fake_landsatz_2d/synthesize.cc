@@ -4,7 +4,11 @@
 #include <math.h>
 #include <stdint.h>
 
+#include <algorithm>
+#include <chrono>
+#include <limits>
 #include <memory>
+#include <random>
 
 #include "break_pattern.h"
 #include "random.h"
@@ -48,6 +52,42 @@ float RandomFrequency(float days_low, float days_high) {
   return M_PI * 2.0f / (util::rndd() * (days_high - days_low) + days_low);
 }
 
+float RandomPhase() { return M_PI * 2.0f * util::rndd(); }
+
+constexpr int kSmoothBufferRadius = 7;
+
+void ConvolveSpine(const float* src, float* dest, int dest_stride, int size) {
+  // Start accumulation.
+  float smooth_acc = 0;
+  for (int i = 0; i <= kSmoothBufferRadius; ++i) {
+    smooth_acc += src[i];
+  }
+  float smooth_count = kSmoothBufferRadius;
+
+  // Overlap with first edge.
+  for (int i = 0; i < kSmoothBufferRadius; ++i) {
+    dest[i * dest_stride] = smooth_acc / smooth_count;
+    smooth_acc += src[kSmoothBufferRadius + i + 1];
+    smooth_count += 1;
+  }
+
+  // Body.
+  for (int i = kSmoothBufferRadius; 
+       i < (size - kSmoothBufferRadius); 
+       ++i) {
+    dest[i * dest_stride] = smooth_acc / (kSmoothBufferRadius * 2.f + 1.f);
+    smooth_acc += src[i + kSmoothBufferRadius + 1];
+    smooth_acc -= src[i - kSmoothBufferRadius];
+  }
+
+  // Overlap with last edge.
+  for (int i = size - kSmoothBufferRadius + 1; i < size; ++i) {
+    smooth_count -= 1;
+    smooth_acc -= src[i - kSmoothBufferRadius - 1];
+    dest[i * dest_stride] = smooth_acc / smooth_count;
+  }
+}
+
 void GenerateTimeSeries(const SynthesizeConfig& config,
                         const std::vector<int>& events, float* raw, 
                         float* distance, float* spine, int stride) {
@@ -63,14 +103,14 @@ void GenerateTimeSeries(const SynthesizeConfig& config,
   harmonics[0] = {.frequency = RandomFrequency(
                       kYearDays - config.base_harmonic_freq_day_radius,
                       kYearDays + config.base_harmonic_freq_day_radius), 
-                  .phase = M_PI * 2 * util::rndd(),
+                  .phase = RandomPhase(),
                   .amplitude_max = config.base_harmonic_max_amplitude,
                   .amplitude_saturate = config.base_harmonic_amplitude_sat,
                   .saturate_max = config.harmonic_tension_max};
   harmonics[1] = {.frequency = RandomFrequency(
                       config.fast_harmonic_freq_min_days,
                       config.fast_harmonic_freq_max_days), 
-                  .phase = M_PI * 2 * util::rndd(),
+                  .phase = RandomPhase(),
                   .amplitude_max = config.fast_harmonic_max_amplitude,
                   .amplitude_saturate = config.fast_harmonic_amplitude_sat,
                   .saturate_max = config.harmonic_tension_max};
@@ -80,16 +120,125 @@ void GenerateTimeSeries(const SynthesizeConfig& config,
     harmonics[2] = {.frequency = RandomFrequency(
                         config.slow_harmonic_freq_min_years,
                         config.slow_harmonic_freq_max_years), 
-                    .phase = M_PI * 2 * util::rndd(),
+                    .phase = RandomPhase(),
                     .amplitude_max = config.slow_harmonic_max_amplitude,
                     .amplitude_saturate = config.slow_harmonic_amplitude_sat,
                     .saturate_max = 1.0f};
   }
 
-  //
-  // Generate spine and mush harmonics and noise into it.
-  //
+  float gaussian_noise_sigma;
+  float seg_start_y;
+  float seg_end_y;
+  float seg_tension_mu;
 
+  int current_seg = 0;
+  bool reset_seg_params = true;
+
+  std::default_random_engine slow_generator(
+      std::chrono::system_clock::now().time_since_epoch().count());
+  std::normal_distribution<float> normal_distribution;
+
+  auto spine_sharp = CreateArray<float>(config.depth);
+  for (int i = 0; i < config.depth; ++i) {
+    int start_inc = bounds.get()[2 * current_seg];
+    int end_ex = bounds.get()[2 * current_seg + 1];
+
+    if (i >= end_ex) {
+      current_seg += 1;
+      reset_seg_params = true;
+    }
+
+    if (reset_seg_params) {
+      for (int q = 0; q < harmonics_n; ++q) {
+        harmonics[q].GenerateAmplitudeConstants();
+      }
+      float gaussian_noise_sigma =
+          config.min_noise_sigma +
+          util::rndd() * (config.max_noise_sigma - config.min_noise_sigma);
+      seg_start_y = util::rndd();
+      seg_end_y = util::rndd();
+      seg_tension_mu = RandomTensionMu(config.spine_tension_max);
+      reset_seg_params = false;
+    }
+
+    spine_sharp.get()[i] =
+        seg_start_y +
+        (seg_start_y - seg_end_y) *
+            powf((i - start_inc) / (end_ex - start_inc), seg_tension_mu);
+
+    raw[i * stride] = 
+        gaussian_noise_sigma * normal_distribution(slow_generator);
+    for (int q = 0; q < harmonics_n; ++q) {
+      raw[i * stride] += harmonics[q].sample(i);
+    }
+  }
+
+  ConvolveSpine(spine_sharp.get(), spine, stride, config.depth);
+
+  float max_raw = std::numeric_limits<float>::min();
+  float min_raw = std::numeric_limits<float>::max();
+  if (util::TrueWithChance(config.curve_normalize_prob)) {
+    for (int i = 0; i < config.depth; ++i) {
+      raw[i * stride] += spine[i * stride];
+      if (raw[i * stride] < min_raw) {
+        min_raw = raw[i * stride];
+      }
+      if (raw[i * stride] > max_raw) {
+        max_raw = raw[i * stride];
+      }
+    }
+  } else {
+    float edge = util::rndd() * config.curve_normalize_rand_edge;
+    max_raw = 1.0 + edge;
+    min_raw = -edge;
+    for (int i = 0; i < config.depth; ++i) {
+      raw[i * stride] += spine[i * stride];
+    }
+  }
+
+  if ((max_raw - min_raw) == 0) {
+    max_raw = 1;
+    min_raw = 0;
+  }
+
+  for (int i = 0; i < config.depth; ++i) {
+    raw[i * stride] = (raw[i * stride] - min_raw) / (max_raw - min_raw);
+    spine[i * stride] = (spine[i * stride] - min_raw) / (max_raw - min_raw);
+  }
+
+  for (int i = 0; i < config.depth; ++i) {
+    float x = raw[i * stride];
+    if (util::TrueWithChance(config.outlier_prob)) {
+      x += (util::rndd() * 2.f - 1.f) * config.outlier_scale;
+    }
+    if (x < 0) {
+      x = 0;
+    } else if (x > 1) {
+      x = 1;
+    }
+    raw[i * stride] = x;
+  }
+
+  if (events.size() == 2) {
+    for (int i = 0; i < config.depth; ++i) {
+      distance[i * stride] = 1.0;
+    }
+  } else {
+    int current_mid_break = 0;
+    for (int i = 0; i < config.depth; ++i) {
+      if ((current_mid_break < (events.size() - 3)) 
+          &&
+          ((events[current_mid_break + 2] - i) <
+           (i - events[current_mid_break + 1]))) {
+        current_mid_break++;
+      }
+    
+      float fractional_distance =
+          fabsf(events[current_mid_break + 1] - i) / config.max_distance;
+      if (fractional_distance > 1.0f) fractional_distance = 1.0f;
+      distance[i * stride] = fractional_distance;
+    }  
+  }
 }
 }  // namespace
 

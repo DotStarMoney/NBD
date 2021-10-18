@@ -62,7 +62,7 @@ void ConvolveSpine(const float* src, float* dest, int dest_stride, int size) {
   for (int i = 0; i <= kSmoothBufferRadius; ++i) {
     smooth_acc += src[i];
   }
-  float smooth_count = kSmoothBufferRadius;
+  float smooth_count = kSmoothBufferRadius + 1;
 
   // Overlap with first edge.
   for (int i = 0; i < kSmoothBufferRadius; ++i) {
@@ -344,8 +344,8 @@ retry_break_pattern:
   auto mask_trimmed = CreateArray<int8_t>(config.depth * slice_n);
   int dst_offset = 0;
   for (int src_offset = min_index_inc * slice_n;
-       src_offset < min_index_inc * slice_n; ++src_offset) {
-    mask_trimmed.get()[dst_offset] = mask.get()[src_offset] ? 1 : 0;
+       src_offset < max_index_exc * slice_n; ++src_offset) {
+    mask_trimmed.get()[dst_offset++] = mask.get()[src_offset] ? 1 : 0;
   }
 
   auto raw = CreateArray<float>(config.depth * slice_n);
@@ -370,8 +370,8 @@ retry_break_pattern:
   }
 
   return SynthesizeResult{.raw = std::move(raw),
-                          .distance = std::move(distance),
                           .spine = std::move(spine),
+                          .distance = std::move(distance),
                           .mask = std::move(mask_trimmed)};
 }
 

@@ -9,8 +9,8 @@ namespace nbd {
 
 struct SynthesizeResult {
   std::unique_ptr<float> raw;
-  std::unique_ptr<float> distance;
   std::unique_ptr<float> spine;
+  std::unique_ptr<float> distance;
   std::unique_ptr<int8_t> mask;
 };
 
